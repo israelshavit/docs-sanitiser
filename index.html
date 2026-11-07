@@ -213,8 +213,28 @@
       'thorne', 'john', 'smith', 'emma', 'wilson', 'liam', 'brown', 'olivia', 'davis',
       'noah', 'miller', 'ava', 'moore', 'ethan', 'anderson', 'sophia', 'thomas',
       'benjamin', 'weiss', 'yael', 'tal', 'avi', 'omri', 'shir', 'dana', 'gideon',
-      'elena', 'marcus', 'claire', 'hannah', 'lucas', 'nathan', 'chloe', 'adam'
+      'elena', 'marcus', 'claire', 'hannah', 'lucas', 'nathan', 'chloe', 'adam',
+      // More common first names (English and Hebrew). Names that are also everyday words
+      // (e.g. May, Will, Mark, Grace) are left out so ordinary text isn't mistaken for a name.
+      'james', 'robert', 'william', 'richard', 'joseph', 'charles', 'christopher', 'matthew',
+      'anthony', 'steven', 'paul', 'andrew', 'joshua', 'kevin', 'brian', 'george', 'timothy',
+      'ronald', 'edward', 'jason', 'jeffrey', 'ryan', 'jacob', 'gary', 'eric', 'jonathan',
+      'stephen', 'larry', 'justin', 'scott', 'brandon', 'gregory', 'samuel', 'patrick',
+      'peter', 'henry', 'jack', 'oliver', 'harry', 'oscar', 'leo', 'max', 'isaac', 'aaron',
+      'mary', 'patricia', 'jennifer', 'linda', 'elizabeth', 'barbara', 'susan', 'jessica',
+      'karen', 'nancy', 'lisa', 'betty', 'margaret', 'sandra', 'ashley', 'kimberly', 'emily',
+      'donna', 'michelle', 'carol', 'amanda', 'melissa', 'deborah', 'stephanie', 'rebecca',
+      'laura', 'sharon', 'cynthia', 'kathleen', 'amy', 'anna', 'nicole', 'samantha', 'katherine',
+      'emma', 'isabella', 'mia', 'charlotte', 'amelia', 'harper', 'evelyn', 'abigail', 'sofia',
+      'ella', 'lily', 'zoe', 'leah', 'naomi', 'ruth', 'esther', 'miriam', 'judith', 'eva',
+      'yosef', 'yaakov', 'avraham', 'yitzhak', 'shlomo', 'eitan', 'itai', 'ido', 'amit', 'guy',
+      'yoni', 'ori', 'roni', 'noam', 'yuval', 'nadav', 'erez', 'boaz', 'dror', 'ofer', 'ronen',
+      'shira', 'tamar', 'michal', 'efrat', 'keren', 'inbar', 'hila', 'ayelet', 'adi', 'maya',
+      'yarden', 'liat', 'orly', 'sigal', 'galit', 'limor', 'merav', 'osnat', 'rivka', 'dalia'
     ]);
+    // The app's own fake names count as known names too, so a file that was
+    // sanitised before (e.g. containing "Maya Rosen") is still recognised.
+    DUMMY_PERSONAS.forEach(d => { KNOWN_NAME_PARTS.add(d.first.toLowerCase()); KNOWN_NAME_PARTS.add(d.last.toLowerCase()); });
  
     // Common UI/Business words that are capitalized but should NEVER be treated as Person Names
     const UI_STOPWORDS = new Set([
@@ -755,12 +775,15 @@
 
       // Bucket ring pixels by colour (16 levels per channel) and keep the biggest bucket
       const buckets = new Map();
+      const exact = new Map(); // exact colour -> count, to pick a true colour inside the winning bucket
       const addPixel = (i) => {
         const r = ring[i], g = ring[i + 1], b = ring[i + 2];
         const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
-        const bucket = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
-        bucket.n++; bucket.r += r; bucket.g += g; bucket.b += b;
+        const bucket = buckets.get(key) || { n: 0, key };
+        bucket.n++;
         buckets.set(key, bucket);
+        const exactKey = (r << 16) | (g << 8) | b;
+        exact.set(exactKey, (exact.get(exactKey) || 0) + 1);
       };
       const rows = [0, 1, rh - 2, rh - 1].filter(r => r >= 0 && r < rh);
       const cols = [0, 1, rw - 2, rw - 1].filter(c => c >= 0 && c < rw);
@@ -769,9 +792,17 @@
 
       let best = null;
       buckets.forEach(bucket => { if (!best || bucket.n > best.n) best = bucket; });
-      const bgR = Math.round(best.r / best.n);
-      const bgG = Math.round(best.g / best.n);
-      const bgB = Math.round(best.b / best.n);
+      // Within the winning bucket use the single most common exact colour, not an average:
+      // averaging slightly noisy white (e.g. a JPEG scan) gives a visibly grey patch.
+      let bgKey = 0, bgCount = -1;
+      exact.forEach((n, k) => {
+        const r = k >> 16, g = (k >> 8) & 255, b = k & 255;
+        const bucketKey = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+        if (bucketKey === best.key && n > bgCount) { bgCount = n; bgKey = k; }
+      });
+      const bgR = bgKey >> 16;
+      const bgG = (bgKey >> 8) & 255;
+      const bgB = bgKey & 255;
 
       // Highest-contrast interior pixel for original text color
       let maxDist = -1;
