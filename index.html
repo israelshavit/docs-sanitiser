@@ -442,14 +442,34 @@
           w: w.bbox.x1 - w.bbox.x0,
           h: w.bbox.y1 - w.bbox.y0,
           fontWeight: w.fontWeight || '500',
+          fontSize: w.fontSize, // known exactly for PDF text; undefined for OCR
           consumed: false
         }))
         .filter(w => w.text.length > 0);
- 
+
+      // OCR on small text often drops the dot before the domain ending and splits the
+      // address in two ("dlevy@example" + "com"). Join those back into one email word.
+      for (let i = 0; i < words.length - 1; i++) {
+        const w1 = words[i];
+        const w2 = words[i + 1];
+        if (!w1.text.includes('@') || /@[^@]*\.[a-z]{2,}/i.test(w1.text)) continue;
+        if (!/^\.?[a-z]{2,6}[.,;:)>\]]*$/i.test(w2.text)) continue;
+        const sameLine = Math.abs((w1.y + w1.h) - (w2.y + w2.h)) < Math.max(w1.h, w2.h) * 0.8;
+        const gap = w2.x - (w1.x + w1.w);
+        if (!sameLine || gap < -4 || gap > Math.max(w1.h, w2.h) * 1.5) continue;
+        const right = Math.max(w1.x + w1.w, w2.x + w2.w);
+        const bottom = Math.max(w1.y + w1.h, w2.y + w2.h);
+        w1.text = `${w1.text}.${w2.text.replace(/^\./, '')}`;
+        w1.y = Math.min(w1.y, w2.y);
+        w1.w = right - w1.x;
+        w1.h = bottom - w1.y;
+        words.splice(i + 1, 1);
+      }
+
       // PASS 1A: Find all Email Addresses first & create initial Persona slots
       const emailEntries = [];
       words.forEach(w => {
-        if (w.text.includes('@') && w.text.includes('.')) {
+        if (/[^@\s]@[^@\s]+\.[a-z]{2,}/i.test(w.text)) {
           const clues = parseEmailClues(w.text);
           if (clues) {
             w.consumed = true;
@@ -479,6 +499,14 @@
               if (emailClues && !p.origEmail) p.origEmail = emailClues.rawEmail;
               return key;
             }
+          }
+          // Match if a one-part email is initial+last or first+last joined, e.g. "dlevy" or "daniellevy"
+          if (fNorm && lNorm && p.firstClue && !p.lastClue &&
+              (p.firstClue === fNorm[0] + lNorm || p.firstClue === fNorm + lNorm)) {
+            if (!p.origFirst) p.origFirst = first;
+            if (!p.origLast) p.origLast = last;
+            p.lastClue = lNorm;
+            return key;
           }
           // Match if single-local email matches first name
           if (fNorm && p.firstClue && fNorm === p.firstClue && !p.lastClue) {
@@ -534,7 +562,8 @@
             if (
               (p.lastClue && l2 === p.lastClue) ||
               (p.firstClue && l1 === p.firstClue) ||
-              (p.lastClue && p.lastClue.endsWith(l2) && p.lastClue.startsWith(l1[0]))
+              (p.lastClue && p.lastClue.endsWith(l2) && p.lastClue.startsWith(l1[0])) ||
+              (p.firstClue && !p.lastClue && (p.firstClue === l1[0] + l2 || p.firstClue === l1 + l2))
             ) {
               matchesEmailClue = true;
               break;
@@ -559,7 +588,8 @@
               nameFormat: 'FULL',
               personaKey: pKey,
               bbox: { x: mergedX, y: mergedY, w: mergedW, h: mergedH },
-              fontWeight: w1.fontWeight
+              fontWeight: w1.fontWeight,
+              fontSize: w1.fontSize
             });
           }
         }
@@ -581,7 +611,8 @@
               nameFormat: lower === (p.origFirst || '').toLowerCase() ? 'FIRST_ONLY' : 'LAST_ONLY',
               personaKey: pKey,
               bbox: { x: w.x, y: w.y, w: w.w, h: w.h },
-              fontWeight: w.fontWeight
+              fontWeight: w.fontWeight,
+              fontSize: w.fontSize
             });
             break;
           }
@@ -595,7 +626,8 @@
           type: 'EMAIL',
           personaKey: pKey,
           bbox: { x: word.x, y: word.y, w: word.w, h: word.h },
-          fontWeight: word.fontWeight
+          fontWeight: word.fontWeight,
+          fontSize: word.fontSize
         });
       });
  
@@ -617,7 +649,8 @@
             type: 'NUMBER',
             personaKey: null,
             bbox: { x: w.x, y: w.y, w: w.w, h: w.h },
-            fontWeight: w.fontWeight
+            fontWeight: w.fontWeight,
+            fontSize: w.fontSize
           });
         }
       });
@@ -688,7 +721,9 @@
     }
  
     /**
-     * Samples the background color from the box perimeter and the highest-contrast text color inside
+     * Samples the background colour from a ring just outside the box and the highest-contrast
+     * text colour inside. The background is the most common colour in the ring (not the average),
+     * so stray bits of text in the ring don't tint it grey.
      */
     function sampleColors(ctx, bbox) {
       const W = ctx.canvas.width;
@@ -697,24 +732,36 @@
       const y = Math.max(0, Math.floor(bbox.y));
       const w = Math.min(W - x, Math.max(4, Math.floor(bbox.w)));
       const h = Math.min(H - y, Math.max(4, Math.floor(bbox.h)));
- 
+
       const data = ctx.getImageData(x, y, w, h).data;
- 
-      // Perimeter average for background color
-      let rSum = 0, gSum = 0, bSum = 0, count = 0;
-      for (let px = 0; px < w; px++) {
-        const topIdx = px * 4;
-        const botIdx = ((h - 1) * w + px) * 4;
-        rSum += data[topIdx] + data[botIdx];
-        gSum += data[topIdx + 1] + data[botIdx + 1];
-        bSum += data[topIdx + 2] + data[botIdx + 2];
-        count += 2;
-      }
- 
-      const bgR = Math.round(rSum / count);
-      const bgG = Math.round(gSum / count);
-      const bgB = Math.round(bSum / count);
- 
+
+      const pad = 4;
+      const rx = Math.max(0, x - pad);
+      const ry = Math.max(0, y - pad);
+      const rw = Math.min(W, x + w + pad) - rx;
+      const rh = Math.min(H, y + h + pad) - ry;
+      const ring = ctx.getImageData(rx, ry, rw, rh).data;
+
+      // Bucket ring pixels by colour (16 levels per channel) and keep the biggest bucket
+      const buckets = new Map();
+      const addPixel = (i) => {
+        const r = ring[i], g = ring[i + 1], b = ring[i + 2];
+        const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+        const bucket = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+        bucket.n++; bucket.r += r; bucket.g += g; bucket.b += b;
+        buckets.set(key, bucket);
+      };
+      const rows = [0, 1, rh - 2, rh - 1].filter(r => r >= 0 && r < rh);
+      const cols = [0, 1, rw - 2, rw - 1].filter(c => c >= 0 && c < rw);
+      rows.forEach(row => { for (let col = 0; col < rw; col++) addPixel((row * rw + col) * 4); });
+      cols.forEach(col => { for (let row = 0; row < rh; row++) addPixel((row * rw + col) * 4); });
+
+      let best = null;
+      buckets.forEach(bucket => { if (!best || bucket.n > best.n) best = bucket; });
+      const bgR = Math.round(best.r / best.n);
+      const bgG = Math.round(best.g / best.n);
+      const bgB = Math.round(best.b / best.n);
+
       // Highest-contrast interior pixel for original text color
       let maxDist = -1;
       let fgR = 15, fgG = 23, fgB = 42;
@@ -734,6 +781,27 @@
       };
     }
  
+    /**
+     * Estimates the original font size from how wide the original text is: draw the same
+     * text at a reference size and scale. Box height alone is unreliable because OCR boxes
+     * hug the letters (a word with no tall letters gets a short box).
+     */
+    function estimateFontSize(ctx, originalText, boxW, boxH, weight) {
+      const text = (originalText || '').trim();
+      // Digits and capitals all reach the same height (~0.73 of the font size), so for
+      // tokens made only of those, a tight OCR box height gives the size directly.
+      if (/^[A-Z0-9\s\-\/.,()+:#]+$/.test(text)) {
+        return Math.max(9, Math.round(boxH / 0.73));
+      }
+      const ref = 100;
+      ctx.font = `${weight} ${ref}px Inter, "Segoe UI", system-ui, sans-serif`;
+      const refWidth = ctx.measureText(text).width;
+      let size = refWidth > 0 ? ref * boxW / refWidth : boxH * 0.76;
+      // Keep it sensible relative to the box height in case the width is misleading
+      size = Math.min(Math.max(size, boxH * 0.55), boxH * 1.4);
+      return Math.max(9, Math.round(size));
+    }
+
     /**
      * Draws the sanitized image using the detected tokens and updates the Linked Personas strip
      */
@@ -768,9 +836,10 @@
         sanCtx.fillStyle = bgColor;
         sanCtx.fillRect(x - 2, y - 2, w + 4, h + 4);
  
-        // 2. Draw replacement dummy text in the exact bounding box
-        const fontSize = Math.max(10, Math.round(h * 0.76));
+        // 2. Draw replacement dummy text in the exact bounding box, at the original's font size
         const weight = item.fontWeight || '500';
+        // PDF text tells us the exact size; otherwise estimate it from the OCR box.
+        const fontSize = item.fontSize ? Math.round(item.fontSize) : estimateFontSize(sanCtx, item.text, w, h, weight);
         sanCtx.font = `${weight} ${fontSize}px Inter, "Segoe UI", system-ui, sans-serif`;
         sanCtx.fillStyle = fgColor;
         sanCtx.textBaseline = 'middle';
@@ -969,7 +1038,8 @@
             // Box height ~1.25x the font size: the renderer draws replacements at ~76% of box
             // height, so this keeps them the same size as the original text.
             bbox: { x0, y0: baseline - fontH * 0.95, x1, y1: baseline + fontH * 0.3 },
-            fontWeight: '500'
+            fontWeight: '500',
+            fontSize: fontH
           });
         }
       }
@@ -1046,6 +1116,7 @@
           words.forEach(w => allWords.push({
             text: w.text,
             fontWeight: w.fontWeight,
+            fontSize: w.fontSize,
             bbox: { x0: w.bbox.x0, y0: w.bbox.y0 + y, x1: w.bbox.x1, y1: w.bbox.y1 + y }
           }));
 
@@ -1167,7 +1238,8 @@
               x1: Math.round(cursorX + partW),
               y1: Math.round(y + height)
             },
-            fontWeight: weight
+            fontWeight: weight,
+            fontSize
           });
           cursorX += partW + spaceW;
         });
