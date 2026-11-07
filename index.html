@@ -659,11 +659,22 @@
     /**
      * Resolves the synthetic Persona object for a given personaKey and current seedOffset
      */
+    function availableDummyPersonas() {
+      const used = new Set();
+      detectedPersonas.forEach(p => {
+        [p.origFirst, p.origLast, p.firstClue, p.lastClue].forEach(n => { if (n && n.length > 1) used.add(n.toLowerCase()); });
+      });
+      const pool = DUMMY_PERSONAS.filter(d => !used.has(d.first.toLowerCase()) && !used.has(d.last.toLowerCase()));
+      return pool.length ? pool : DUMMY_PERSONAS;
+    }
+
     function getDummyPersonaForSlot(personaKey) {
       const pInfo = detectedPersonas.get(personaKey);
       const slotIdx = pInfo ? pInfo.index : 0;
-      const poolIdx = (slotIdx + seedOffset) % DUMMY_PERSONAS.length;
-      const chosen = DUMMY_PERSONAS[poolIdx];
+      // Never use a fake person whose name already appears in the document (e.g. a file
+      // that was sanitised before), otherwise "Moshe Chaim" would be replaced by itself.
+      const pool = availableDummyPersonas();
+      const chosen = pool[(slotIdx + seedOffset) % pool.length];
       return {
         first: chosen.first.charAt(0).toUpperCase() + chosen.first.slice(1),
         last: chosen.last.charAt(0).toUpperCase() + chosen.last.slice(1),
