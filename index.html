@@ -4,30 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
   <title>Docs Sanitizer — Instant Email & Number Redaction</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind CSS, prebuilt from tailwind.config.js (see CLAUDE.md for the rebuild command) -->
+  <link rel="stylesheet" href="tailwind.css">
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <!-- Tesseract.js v5 for 100% Local Client-Side OCR -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
- 
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace'],
-          }
-        }
-      }
-    }
-  </script>
+  <!-- Tesseract.js for local, in-browser OCR (version pinned so it can't change underneath us) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
   <style>
     /* Prevent iOS/Android callout and text selection when holding the compare button on mobile */
     .no-touch-callout {
@@ -44,7 +30,7 @@
   <header class="pt-6 sm:pt-10 pb-4 sm:pb-6 px-4 text-center max-w-2xl mx-auto w-full">
     <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] sm:text-xs font-medium mb-3 sm:mb-4">
       <i class="fa-solid fa-shield-halved"></i>
-      <span>100% Private • Processed Locally in Your Browser</span>
+      <span>Private • Your Images Never Leave Your Browser</span>
     </div>
     <h1 class="text-2xl sm:text-4xl font-bold tracking-tight text-white">
       Docs Sanitizer
@@ -169,7 +155,10 @@
  
   <!-- ==================== MINIMAL FOOTER ==================== -->
   <footer class="py-4 px-4 text-center text-[11px] sm:text-xs text-slate-600">
-    Step 1 MVP • Linked Names, Emails & Numbers Replaced Automatically
+    <p class="max-w-xl mx-auto mb-2 leading-relaxed text-slate-500">
+      Your screenshots are read and edited on your own device and are never uploaded. To work, the page downloads its code, fonts, icons and text-recognition data from public content networks (jsDelivr, cdnjs and Google Fonts).
+    </p>
+    <p>Step 1 MVP • Linked Names, Emails & Numbers Replaced Automatically</p>
   </footer>
  
   <!-- ==================== CORE SANITIZER LOGIC ==================== -->
@@ -800,7 +789,7 @@
       summaryBadgeText.textContent = `Done! Replaced ${nameLabel}, ${emailLabel}, and ${numLabel}.`;
  
       // Populate Linked Identity Mapping pills
-      identityMappingPills.innerHTML = '';
+      identityMappingPills.replaceChildren();
       if (detectedPersonas.size === 0) {
         identityMappingStrip.classList.add('hidden');
       } else {
@@ -823,16 +812,29 @@
  
           const pill = document.createElement('div');
           pill.className = 'flex flex-col sm:inline-flex sm:flex-row sm:items-center gap-1 sm:gap-1.5 px-3 py-2 sm:px-2.5 sm:py-1 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono break-all sm:break-normal';
-          pill.innerHTML = `
-            <span class="text-slate-400 line-through">${origDisplay}</span>
-            <span class="hidden sm:inline-flex items-center">
-              <i class="fa-solid fa-arrow-right text-[10px] text-sky-400"></i>
-            </span>
-            <span class="sm:hidden text-[10px] text-sky-400 font-sans font-medium flex items-center gap-1">
-              <i class="fa-solid fa-arrow-turn-down fa-rotate-90"></i> Replaced with:
-            </span>
-            <span class="text-emerald-300 font-semibold">${fakeDisplay}</span>
-          `;
+          // Build the pill from DOM nodes: origDisplay is text read out of the image,
+          // so it must never be inserted as HTML.
+          const origSpan = document.createElement('span');
+          origSpan.className = 'text-slate-400 line-through';
+          origSpan.textContent = origDisplay;
+
+          const arrowDesktop = document.createElement('span');
+          arrowDesktop.className = 'hidden sm:inline-flex items-center';
+          const arrowIcon = document.createElement('i');
+          arrowIcon.className = 'fa-solid fa-arrow-right text-[10px] text-sky-400';
+          arrowDesktop.appendChild(arrowIcon);
+
+          const arrowMobile = document.createElement('span');
+          arrowMobile.className = 'sm:hidden text-[10px] text-sky-400 font-sans font-medium flex items-center gap-1';
+          const turnIcon = document.createElement('i');
+          turnIcon.className = 'fa-solid fa-arrow-turn-down fa-rotate-90';
+          arrowMobile.append(turnIcon, ' Replaced with:');
+
+          const fakeSpan = document.createElement('span');
+          fakeSpan.className = 'text-emerald-300 font-semibold';
+          fakeSpan.textContent = fakeDisplay;
+
+          pill.append(origSpan, arrowDesktop, arrowMobile, fakeSpan);
           identityMappingPills.appendChild(pill);
         });
       }
