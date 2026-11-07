@@ -14,6 +14,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <!-- Tesseract.js for local, in-browser OCR (version pinned so it can't change underneath us) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+  <!-- PDF.js renders PDF pages and reads their text; jsPDF builds the sanitised PDF (both pinned) -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
   <style>
     /* Prevent iOS/Android callout and text selection when holding the compare button on mobile */
     .no-touch-callout {
@@ -36,7 +39,7 @@
       Docs Sanitiser
     </h1>
     <p class="mt-2 sm:mt-2.5 text-xs sm:text-base text-slate-400 leading-relaxed px-1">
-      Upload or paste a screenshot. Every <strong class="text-slate-200 font-medium">name</strong>, <strong class="text-slate-200 font-medium">email address</strong>, and <strong class="text-slate-200 font-medium">number</strong> is replaced with linked, realistic dummy data.
+      Upload a screenshot or PDF, or paste a screenshot. Every <strong class="text-slate-200 font-medium">name</strong>, <strong class="text-slate-200 font-medium">email address</strong>, and <strong class="text-slate-200 font-medium">number</strong> is replaced with linked, realistic dummy data.
     </p>
   </header>
  
@@ -51,18 +54,18 @@
         </div>
  
         <h2 class="text-lg sm:text-xl font-semibold text-white">
-          Upload Screenshot
+          Upload Screenshot or PDF
         </h2>
         <p class="text-xs sm:text-sm text-slate-400 mt-1.5 leading-relaxed">
-          Tap below to select a screenshot from your phone or computer<span class="hidden sm:inline">, drag & drop here, or press <kbd class="px-2 py-0.5 bg-slate-800 text-slate-200 rounded border border-slate-700 font-mono text-xs">Ctrl+V</kbd> to paste</span>
+          Tap below to select a screenshot or PDF from your phone or computer<span class="hidden sm:inline">, drag & drop here, or press <kbd class="px-2 py-0.5 bg-slate-800 text-slate-200 rounded border border-slate-700 font-mono text-xs">Ctrl+V</kbd> to paste</span>
         </p>
  
         <div class="mt-6 sm:mt-7 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 w-full">
           <label for="fileInput" class="w-full sm:w-auto min-h-[48px] px-6 py-3.5 sm:py-3 rounded-xl bg-sky-500 hover:bg-sky-400 active:bg-sky-300 text-slate-950 font-semibold text-sm shadow-lg shadow-sky-500/20 cursor-pointer transition inline-flex items-center justify-center gap-2">
             <i class="fa-solid fa-image"></i>
-            <span>Choose Image</span>
+            <span>Choose File</span>
           </label>
-          <input id="fileInput" type="file" accept="image/*" class="hidden" />
+          <input id="fileInput" type="file" accept="image/*,application/pdf,.pdf" class="hidden" />
  
           <button id="btnTrySample" type="button" class="w-full sm:w-auto min-h-[48px] px-5 py-3.5 sm:py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 font-medium text-sm border border-slate-700 transition inline-flex items-center justify-center gap-2">
             <i class="fa-solid fa-wand-magic-sparkles text-sky-400"></i>
@@ -84,6 +87,10 @@
       <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden mt-5">
         <div id="progressBarFill" class="bg-gradient-to-r from-sky-400 to-indigo-500 h-full w-1/6 transition-all duration-200 rounded-full"></div>
       </div>
+      <button id="btnProcessingBack" type="button" class="hidden mt-5 min-h-[44px] px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 border border-slate-700 text-sm font-medium transition inline-flex items-center justify-center gap-2">
+        <i class="fa-solid fa-arrow-rotate-left"></i>
+        <span>Try Another File</span>
+      </button>
     </div>
  
     <!-- STATE 3: RESULT VIEW -->
@@ -123,7 +130,7 @@
  
       <!-- Sanitized Image Canvas Frame -->
       <div class="w-full bg-slate-900 border border-slate-800 rounded-2xl p-2 sm:p-4 shadow-2xl overflow-hidden flex flex-col items-center justify-center">
-        <div class="w-full overflow-x-auto flex items-center justify-center max-h-[60vh] sm:max-h-[68vh]">
+        <div id="canvasScroll" class="w-full overflow-x-auto flex items-center justify-center max-h-[60vh] sm:max-h-[68vh]">
           <canvas id="resultCanvas" class="block w-full h-auto max-w-full rounded-lg shadow-md"></canvas>
         </div>
         <p class="sm:hidden text-[11px] text-slate-500 mt-2 flex items-center gap-1.5">
@@ -136,12 +143,12 @@
       <div class="mt-5 sm:mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2.5 sm:gap-3 w-full">
         <button id="btnDownload" type="button" class="w-full sm:w-auto min-h-[48px] px-6 py-3.5 sm:py-3 rounded-xl bg-sky-500 hover:bg-sky-400 active:bg-sky-300 text-slate-950 font-semibold text-sm shadow-lg shadow-sky-500/20 transition inline-flex items-center justify-center gap-2">
           <i class="fa-solid fa-download"></i>
-          <span>Download Sanitized Image</span>
+          <span id="downloadSanitizedLabel">Download Sanitized Image</span>
         </button>
  
         <button id="btnDownloadOriginal" type="button" class="w-full sm:w-auto min-h-[48px] px-5 py-3.5 sm:py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-100 font-medium text-sm border border-slate-700 transition inline-flex items-center justify-center gap-2">
           <i class="fa-regular fa-file-image text-sky-400"></i>
-          <span>Download Original Image</span>
+          <span id="downloadOriginalLabel">Download Original Image</span>
         </button>
  
         <button id="btnReset" type="button" class="w-full sm:w-auto min-h-[48px] px-5 py-3.5 sm:py-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:bg-slate-700 text-slate-300 font-medium text-sm border border-slate-800 transition inline-flex items-center justify-center gap-2">
@@ -156,7 +163,7 @@
   <!-- ==================== MINIMAL FOOTER ==================== -->
   <footer class="py-4 px-4 text-center text-[11px] sm:text-xs text-slate-600">
     <p class="max-w-xl mx-auto mb-2 leading-relaxed text-slate-500">
-      Your screenshots are read and edited on your own device and are never uploaded. To work, the page downloads its code, fonts, icons and text-recognition data from public content networks (jsDelivr, cdnjs and Google Fonts).
+      Your screenshots and PDFs are read and edited on your own device and are never uploaded. To work, the page downloads its code, fonts, icons and text-recognition data from public content networks (jsDelivr, cdnjs and Google Fonts).
     </p>
     <p>Step 1 MVP • Linked Names, Emails & Numbers Replaced Automatically</p>
   </footer>
@@ -220,7 +227,10 @@
       'created', 'updated', 'modified', 'active', 'inactive', 'verified', 'profile',
       'settings', 'dashboard', 'overview', 'report', 'monthly', 'annual', 'payment',
       'method', 'credit', 'card', 'bank', 'transfer', 'receipt', 'description',
-      'quantity', 'price', 'subtotal', 'tax', 'discount', 'notes', 'terms', 'id'
+      'quantity', 'price', 'subtotal', 'tax', 'discount', 'notes', 'terms', 'id',
+      // Greetings, sign-offs and titles that often sit right before a name ("Thanks Daniel", "Mr Levy")
+      'thanks', 'thank', 'dear', 'hi', 'hello', 'regards', 'best', 'kind', 'sincerely', 'cheers',
+      'attn', 'mr', 'mrs', 'ms', 'dr', 'prof'
     ]);
  
     function showView(viewName) {
@@ -341,7 +351,8 @@
      * into clues for matching names on the screenshot.
      */
     function parseEmailClues(emailStr) {
-      const cleaned = emailStr.trim().replace(/[,;:)>\]]+$/, '');
+      // Strip punctuation stuck to the address, e.g. "(a.b@c.com" or "a.b@c.com." at the end of a sentence
+      const cleaned = emailStr.trim().replace(/^[(<\[{"']+/, '').replace(/[.,;:)>\]}"']+$/, '');
       const [localPart, domainPart] = cleaned.toLowerCase().split('@');
       if (!localPart || !domainPart) return null;
  
@@ -641,7 +652,9 @@
  
       if (item.type === 'EMAIL') {
         const dummy = getDummyPersonaForSlot(item.personaKey);
-        return formatLinkedEmail(item.text, dummy);
+        // Keep any punctuation that was attached to the original, e.g. "(" or a trailing "."
+        const wrap = item.text.match(/^([(<\[{"']*)[\s\S]*?([.,;:)>\]}"']*)$/);
+        return (wrap ? wrap[1] : '') + formatLinkedEmail(item.text, dummy) + (wrap ? wrap[2] : '');
       }
  
       if (item.type === 'NUMBER') {
@@ -845,9 +858,10 @@
      */
     async function processUploadedImage(imgElement) {
       showView('PROCESSING');
+      currentSource = { kind: 'image' };
       progressBarFill.style.width = '10%';
       progressStatusText.textContent = 'Preparing image canvas...';
- 
+
       originalCanvas.width = imgElement.naturalWidth || imgElement.width;
       originalCanvas.height = imgElement.naturalHeight || imgElement.height;
       const origCtx = originalCanvas.getContext('2d');
@@ -870,10 +884,244 @@
         analyzeTokensAndLinkPersonas(words);
  
         renderSanitizedOutput();
+        updateResultForSource();
         showView('RESULT');
       } catch (err) {
-        progressStatusText.textContent = 'Error scanning image: ' + err.message;
+        showProcessingError('Error scanning image: ' + err.message);
       }
+    }
+
+    // ==================== PDF SUPPORT ====================
+    // Each PDF page is rendered to an image and the pages are stacked into one tall canvas,
+    // so the existing engine links personas across all pages. The download slices the
+    // sanitised canvas back into pages and saves them as a new, image-only (flattened) PDF.
+
+    const PDF_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+    const MAX_PDF_PAGES = 20;
+    const PAGE_GAP = 24;           // px between stacked pages in the preview
+    const MAX_CANVAS_HEIGHT = 30000; // stay under browser canvas size limits
+
+    // { kind: 'image' } or { kind: 'pdf', name, bytes, pages: [{ y, width, height, widthPt, heightPt }] }
+    let currentSource = { kind: 'image' };
+    let pdfWorkerReady = null;
+
+    const btnProcessingBack = document.getElementById('btnProcessingBack');
+
+    function showProcessingError(message) {
+      progressStatusText.textContent = message;
+      btnProcessingBack.classList.remove('hidden');
+    }
+
+    function setProgress(pct, text) {
+      progressBarFill.style.width = `${Math.round(pct)}%`;
+      progressStatusText.textContent = text;
+    }
+
+    function isPdfFile(file) {
+      return file && (file.type === 'application/pdf' || /\.pdf$/i.test(file.name || ''));
+    }
+
+    // Browsers refuse to start a worker script from another site, so fetch the
+    // PDF.js worker once and run it from a local blob URL.
+    function ensurePdfWorker() {
+      if (!pdfWorkerReady) {
+        pdfWorkerReady = fetch(PDF_WORKER_URL)
+          .then(r => {
+            if (!r.ok) throw new Error('Could not load the PDF reader. Check your internet connection.');
+            return r.text();
+          })
+          .then(code => {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+          })
+          .catch(err => {
+            pdfWorkerReady = null;
+            throw err;
+          });
+      }
+      return pdfWorkerReady;
+    }
+
+    // Words from a PDF's own text layer, positioned in rendered-page pixels.
+    // Each text run is split into words by measuring character widths proportionally.
+    async function wordsFromTextLayer(page, viewport) {
+      const content = await page.getTextContent();
+      const measure = document.createElement('canvas').getContext('2d');
+      const words = [];
+      for (const item of content.items) {
+        if (!item.str || !item.str.trim()) continue;
+        const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+        if (Math.abs(tx[1]) > 0.01 || Math.abs(tx[2]) > 0.01) continue; // rotated text: leave to OCR
+        const fontH = Math.hypot(tx[2], tx[3]);
+        const runWidth = item.width * viewport.scale;
+        if (!(fontH > 0) || !(runWidth > 0)) continue;
+
+        measure.font = `${fontH}px Helvetica, Arial, sans-serif`;
+        const ratio = runWidth / (measure.measureText(item.str).width || 1);
+        const left = tx[4];
+        const baseline = tx[5];
+        const wordRe = /\S+/g;
+        let m;
+        while ((m = wordRe.exec(item.str))) {
+          const x0 = left + measure.measureText(item.str.slice(0, m.index)).width * ratio;
+          const x1 = x0 + measure.measureText(m[0]).width * ratio;
+          words.push({
+            text: m[0],
+            // Box height ~1.25x the font size: the renderer draws replacements at ~76% of box
+            // height, so this keeps them the same size as the original text.
+            bbox: { x0, y0: baseline - fontH * 0.95, x1, y1: baseline + fontH * 0.3 },
+            fontWeight: '500'
+          });
+        }
+      }
+      return words;
+    }
+
+    async function ocrWords(canvas, onProgress) {
+      const result = await Tesseract.recognize(canvas, 'eng', {
+        logger: m => { if (m.status === 'recognizing text' && m.progress) onProgress(m.progress); }
+      });
+      return result.data.words || [];
+    }
+
+    async function processPdfFile(file) {
+      showView('PROCESSING');
+      btnProcessingBack.classList.add('hidden');
+      setProgress(5, 'Opening PDF...');
+      try {
+        await ensurePdfWorker();
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let pdf;
+        try {
+          // PDF.js takes ownership of the buffer it is given, so pass a copy.
+          pdf = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+        } catch (err) {
+          if (err && err.name === 'PasswordException') throw new Error('This PDF is password-protected. Remove the password and try again.');
+          throw new Error('This file could not be opened as a PDF.');
+        }
+        if (pdf.numPages > MAX_PDF_PAGES) {
+          throw new Error(`This PDF has ${pdf.numPages} pages. Up to ${MAX_PDF_PAGES} pages are supported.`);
+        }
+
+        const pages = [];
+        for (let n = 1; n <= pdf.numPages; n++) pages.push(await pdf.getPage(n));
+        const pointSizes = pages.map(p => p.getViewport({ scale: 1 }));
+        const maxWidthPt = Math.max(...pointSizes.map(v => v.width));
+        const totalHeightPt = pointSizes.reduce((s, v) => s + v.height, 0);
+        const scale = Math.min(2, 2000 / maxWidthPt, (MAX_CANVAS_HEIGHT - PAGE_GAP * (pages.length - 1)) / totalHeightPt);
+        const viewports = pages.map(p => p.getViewport({ scale }));
+
+        const width = Math.ceil(Math.max(...viewports.map(v => v.width)));
+        const height = Math.ceil(viewports.reduce((s, v) => s + Math.ceil(v.height), 0) + PAGE_GAP * (pages.length - 1));
+        originalCanvas.width = width;
+        originalCanvas.height = height;
+        const ctx = originalCanvas.getContext('2d');
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, width, height);
+
+        const layout = [];
+        const allWords = [];
+        let y = 0;
+        for (let i = 0; i < pages.length; i++) {
+          const share = 90 / pages.length;
+          const base = 5 + i * share;
+          const vp = viewports[i];
+          const pw = Math.ceil(vp.width);
+          const ph = Math.ceil(vp.height);
+          setProgress(base, `Reading page ${i + 1} of ${pages.length}...`);
+
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = pw;
+          pageCanvas.height = ph;
+          const pctx = pageCanvas.getContext('2d');
+          pctx.fillStyle = '#ffffff';
+          pctx.fillRect(0, 0, pw, ph);
+          await pages[i].render({ canvasContext: pctx, viewport: vp }).promise;
+          ctx.drawImage(pageCanvas, 0, y);
+
+          let words = await wordsFromTextLayer(pages[i], vp);
+          if (words.length < 3) {
+            // Little or no real text: probably a scanned page, so read it with OCR.
+            words = await ocrWords(pageCanvas, p => setProgress(base + share * p, `Scanning page ${i + 1} of ${pages.length} (${Math.round(p * 100)}%)`));
+          }
+          words.forEach(w => allWords.push({
+            text: w.text,
+            fontWeight: w.fontWeight,
+            bbox: { x0: w.bbox.x0, y0: w.bbox.y0 + y, x1: w.bbox.x1, y1: w.bbox.y1 + y }
+          }));
+
+          layout.push({ y, width: pw, height: ph, widthPt: pointSizes[i].width, heightPt: pointSizes[i].height });
+          y += ph + PAGE_GAP;
+        }
+
+        currentSource = { kind: 'pdf', name: file.name, bytes, pages: layout };
+        seedOffset = 0;
+        analyzeTokensAndLinkPersonas(allWords);
+        renderSanitizedOutput();
+        updateResultForSource();
+        showView('RESULT');
+      } catch (err) {
+        showProcessingError(err.message || 'This PDF could not be processed.');
+      }
+    }
+
+    // Button labels and preview scrolling depend on whether the result is an image or a PDF.
+    function updateResultForSource() {
+      const isPdf = currentSource.kind === 'pdf';
+      document.getElementById('downloadSanitizedLabel').textContent = isPdf ? 'Download Sanitised PDF' : 'Download Sanitized Image';
+      document.getElementById('downloadOriginalLabel').textContent = isPdf ? 'Download Original PDF' : 'Download Original Image';
+      // A tall stack of pages must scroll from the top, so don't vertically centre it.
+      const scroller = document.getElementById('canvasScroll');
+      scroller.classList.toggle('items-center', !isPdf);
+      scroller.classList.toggle('items-start', isPdf);
+    }
+
+    function sanitisedPdfName(name) {
+      const base = (name || 'document').replace(/\.pdf$/i, '');
+      return `${base}-sanitised.pdf`;
+    }
+
+    function downloadSanitisedPdf() {
+      const { jsPDF } = window.jspdf;
+      let doc = null;
+      currentSource.pages.forEach(p => {
+        const slice = document.createElement('canvas');
+        slice.width = p.width;
+        slice.height = p.height;
+        slice.getContext('2d').drawImage(sanitizedCanvas, 0, p.y, p.width, p.height, 0, 0, p.width, p.height);
+        const image = slice.toDataURL('image/jpeg', 0.92);
+        const orientation = p.widthPt > p.heightPt ? 'landscape' : 'portrait';
+        if (!doc) doc = new jsPDF({ unit: 'pt', format: [p.widthPt, p.heightPt], orientation, compress: true });
+        else doc.addPage([p.widthPt, p.heightPt], orientation);
+        doc.addImage(image, 'JPEG', 0, 0, p.widthPt, p.heightPt);
+      });
+      doc.save(sanitisedPdfName(currentSource.name));
+    }
+
+    function downloadOriginalPdf() {
+      const url = URL.createObjectURL(new Blob([currentSource.bytes], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.download = currentSource.name || 'original.pdf';
+      link.href = url;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // Routes a chosen or dropped file to the image or PDF pipeline.
+    function handleFile(file) {
+      if (!file) return;
+      if (isPdfFile(file)) {
+        processPdfFile(file);
+        return;
+      }
+      if (!file.type.startsWith('image/')) return;
+      btnProcessingBack.classList.add('hidden');
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        processUploadedImage(img);
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
     }
  
     /**
@@ -1033,8 +1281,10 @@
       setTimeout(() => {
         progressBarFill.style.width = '100%';
         seedOffset = 0; // Ensures slot 0 defaults to Moshe Chaim (m.chaim@mail.com)
+        currentSource = { kind: 'image' };
         analyzeTokensAndLinkPersonas(simulatedWords);
         renderSanitizedOutput();
+        updateResultForSource();
         showView('RESULT');
       }, 400);
     }
@@ -1043,15 +1293,7 @@
  
     // File Input Upload
     document.getElementById('fileInput').addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        processUploadedImage(img);
-        URL.revokeObjectURL(url);
-      };
-      img.src = url;
+      handleFile(e.target.files[0]);
       e.target.value = '';
     });
  
@@ -1073,16 +1315,7 @@
     dropZone.addEventListener('drop', e => {
       e.preventDefault();
       dropZone.classList.remove('border-sky-400', 'bg-slate-900');
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith('image/')) {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onload = () => {
-          processUploadedImage(img);
-          URL.revokeObjectURL(url);
-        };
-        img.src = url;
-      }
+      handleFile(e.dataTransfer.files[0]);
     });
  
     // Global Paste (Ctrl+V) anywhere on the page
@@ -1151,6 +1384,10 @@
  
     // Download Sanitized Image Button
     document.getElementById('btnDownload').addEventListener('click', () => {
+      if (currentSource.kind === 'pdf') {
+        downloadSanitisedPdf();
+        return;
+      }
       const link = document.createElement('a');
       link.download = `sanitized-screenshot-${Date.now()}.png`;
       link.href = sanitizedCanvas.toDataURL('image/png');
@@ -1159,6 +1396,10 @@
  
     // Download Original Image Button
     document.getElementById('btnDownloadOriginal').addEventListener('click', () => {
+      if (currentSource.kind === 'pdf') {
+        downloadOriginalPdf();
+        return;
+      }
       const link = document.createElement('a');
       link.download = `original-screenshot-${Date.now()}.png`;
       link.href = originalCanvas.toDataURL('image/png');
@@ -1180,6 +1421,12 @@
  
     // Upload Another Screenshot Button
     document.getElementById('btnReset').addEventListener('click', () => {
+      showView('UPLOAD');
+    });
+
+    // "Try Another File" after a processing error
+    btnProcessingBack.addEventListener('click', () => {
+      btnProcessingBack.classList.add('hidden');
       showView('UPLOAD');
     });
   </script>
