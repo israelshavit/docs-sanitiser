@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <title>Docs Sanitizer — Instant Email & Number Redaction</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <!-- Tesseract.js v5 for 100% Local Client-Side OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+ 
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Prevent iOS/Android callout and text selection when holding the compare button on mobile */
+    .no-touch-callout {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col justify-between selection:bg-sky-500 selection:text-white overflow-x-hidden">
+ 
+  <!-- ==================== SIMPLE CENTERED HEADER ==================== -->
+  <header class="pt-6 sm:pt-10 pb-4 sm:pb-6 px-4 text-center max-w-2xl mx-auto w-full">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] sm:text-xs font-medium mb-3 sm:mb-4">
+      <i class="fa-solid fa-shield-halved"></i>
+      <span>100% Private • Processed Locally in Your Browser</span>
+    </div>
+    <h1 class="text-2xl sm:text-4xl font-bold tracking-tight text-white">
+      Docs Sanitizer
+    </h1>
+    <p class="mt-2 sm:mt-2.5 text-xs sm:text-base text-slate-400 leading-relaxed px-1">
+      Upload or paste a screenshot. Every <strong class="text-slate-200 font-medium">name</strong>, <strong class="text-slate-200 font-medium">email address</strong>, and <strong class="text-slate-200 font-medium">number</strong> is replaced with linked, realistic dummy data.
+    </p>
+  </header>
+ 
+  <!-- ==================== MAIN SINGLE-STEP CONTAINER ==================== -->
+  <main class="flex-1 flex flex-col items-center justify-center px-3 sm:px-4 pb-8 sm:pb-12 w-full max-w-5xl mx-auto">
+ 
+    <!-- STATE 1: UPLOAD PROMPT CARD -->
+    <div id="viewUpload" class="w-full max-w-xl">
+      <div id="dropZone" class="bg-slate-900/90 hover:bg-slate-900 border-2 border-dashed border-slate-700 hover:border-sky-500/70 rounded-2xl sm:rounded-3xl p-6 sm:p-12 text-center transition-all duration-200 shadow-2xl shadow-black/50 cursor-pointer group">
+        <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center mx-auto mb-4 sm:mb-5 group-hover:scale-105 group-hover:bg-sky-500/20 transition-transform">
+          <i class="fa-solid fa-cloud-arrow-up text-xl sm:text-2xl"></i>
+        </div>
+ 
+        <h2 class="text-lg sm:text-xl font-semibold text-white">
+          Upload Screenshot
+        </h2>
+        <p class="text-xs sm:text-sm text-slate-400 mt-1.5 leading-relaxed">
+          Tap below to select a screenshot from your phone or computer<span class="hidden sm:inline">, drag & drop here, or press <kbd class="px-2 py-0.5 bg-slate-800 text-slate-200 rounded border border-slate-700 font-mono text-xs">Ctrl+V</kbd> to paste</span>
+        </p>
+ 
+        <div class="mt-6 sm:mt-7 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 w-full">
+          <label for="fileInput" class="w-full sm:w-auto min-h-[48px] px-6 py-3.5 sm:py-3 rounded-xl bg-sky-500 hover:bg-sky-400 active:bg-sky-300 text-slate-950 font-semibold text-sm shadow-lg shadow-sky-500/20 cursor-pointer transition inline-flex items-center justify-center gap-2">
+            <i class="fa-solid fa-image"></i>
+            <span>Choose Image</span>
+          </label>
+          <input id="fileInput" type="file" accept="image/*" class="hidden" />
+ 
+          <button id="btnTrySample" type="button" class="w-full sm:w-auto min-h-[48px] px-5 py-3.5 sm:py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 font-medium text-sm border border-slate-700 transition inline-flex items-center justify-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles text-sky-400"></i>
+            <span>Try with a Sample Screenshot</span>
+          </button>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- STATE 2: PROCESSING SPINNER & PROGRESS -->
+    <div id="viewProcessing" class="hidden w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl p-6 sm:p-8 text-center shadow-2xl">
+      <div class="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center mx-auto mb-4">
+        <i class="fa-solid fa-circle-notch fa-spin text-2xl"></i>
+      </div>
+      <h3 class="text-base font-semibold text-white">Sanitizing Screenshot...</h3>
+      <p id="progressStatusText" class="text-xs text-slate-400 mt-1.5 font-mono break-words">
+        Scanning image for names, emails, and numbers...
+      </p>
+      <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden mt-5">
+        <div id="progressBarFill" class="bg-gradient-to-r from-sky-400 to-indigo-500 h-full w-1/6 transition-all duration-200 rounded-full"></div>
+      </div>
+    </div>
+ 
+    <!-- STATE 3: RESULT VIEW -->
+    <div id="viewResult" class="hidden w-full flex flex-col items-center">
+      
+      <!-- Top Summary Pill & Shuffle Button (Stacks Vertically on Mobile, Horizontal on Desktop) -->
+      <div class="w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 mb-3">
+        <div class="inline-flex items-center justify-center sm:justify-start gap-2 px-3.5 py-2 sm:py-1.5 rounded-xl sm:rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs sm:text-sm font-medium text-center sm:text-left">
+          <i class="fa-solid fa-circle-check text-emerald-400 shrink-0"></i>
+          <span id="summaryBadgeText">Done! Replaced 0 names, 0 emails, and 0 numbers.</span>
+        </div>
+ 
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <button id="btnRerollDummy" type="button" class="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 border border-slate-700 text-xs font-medium transition flex items-center justify-center gap-2" title="Generate different random names, emails, and numbers">
+            <i class="fa-solid fa-dice text-sky-400"></i>
+            <span>Shuffle Dummy Values</span>
+          </button>
+        </div>
+      </div>
+ 
+      <!-- Linked Identity Mapping Preview Strip (Vertical list on mobile, wrap pills on desktop) -->
+      <div id="identityMappingStrip" class="w-full mb-3 p-3 sm:px-3.5 sm:py-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 text-xs">
+        <span class="text-slate-400 font-medium flex items-center gap-1.5 mr-1 pb-1 sm:pb-0 border-b border-slate-800/80 sm:border-b-0">
+          <i class="fa-solid fa-link text-sky-400"></i>
+          <span>Linked Personas:</span>
+        </span>
+        <div id="identityMappingPills" class="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 w-full sm:w-auto"></div>
+      </div>
+
+      <!-- Hold to Show Original Button (Below Linked Personas) -->
+      <div class="w-full flex items-center justify-start mb-3">
+        <button id="btnCompareOriginal" type="button" class="no-touch-callout w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-amber-500/20 active:text-amber-300 active:border-amber-500/40 text-slate-200 border border-slate-700 text-xs font-medium transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-eye"></i>
+          <span id="compareBtnLabel">Hold to Show Original</span>
+        </button>
+      </div>
+ 
+      <!-- Sanitized Image Canvas Frame -->
+      <div class="w-full bg-slate-900 border border-slate-800 rounded-2xl p-2 sm:p-4 shadow-2xl overflow-hidden flex flex-col items-center justify-center">
+        <div class="w-full overflow-x-auto flex items-center justify-center max-h-[60vh] sm:max-h-[68vh]">
+          <canvas id="resultCanvas" class="block w-full h-auto max-w-full rounded-lg shadow-md"></canvas>
+        </div>
+        <p class="sm:hidden text-[11px] text-slate-500 mt-2 flex items-center gap-1.5">
+          <i class="fa-solid fa-magnifying-glass-plus text-slate-400"></i>
+          <span>Pinch to zoom • Full high-res preserved on download</span>
+        </p>
+      </div>
+ 
+      <!-- Primary Bottom Actions (Stacks Vertically on Mobile with Primary Download First, Horizontal on Desktop) -->
+      <div class="mt-5 sm:mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2.5 sm:gap-3 w-full">
+        <button id="btnDownload" type="button" class="w-full sm:w-auto min-h-[48px] px-6 py-3.5 sm:py-3 rounded-xl bg-sky-500 hover:bg-sky-400 active:bg-sky-300 text-slate-950 font-semibold text-sm shadow-lg shadow-sky-500/20 transition inline-flex items-center justify-center gap-2">
+          <i class="fa-solid fa-download"></i>
+          <span>Download Sanitized Image</span>
+        </button>
+ 
+        <button id="btnDownloadOriginal" type="button" class="w-full sm:w-auto min-h-[48px] px-5 py-3.5 sm:py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-100 font-medium text-sm border border-slate-700 transition inline-flex items-center justify-center gap-2">
+          <i class="fa-regular fa-file-image text-sky-400"></i>
+          <span>Download Original Image</span>
+        </button>
+ 
+        <button id="btnReset" type="button" class="w-full sm:w-auto min-h-[48px] px-5 py-3.5 sm:py-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:bg-slate-700 text-slate-300 font-medium text-sm border border-slate-800 transition inline-flex items-center justify-center gap-2">
+          <i class="fa-solid fa-arrow-rotate-left"></i>
+          <span>Upload Another Image</span>
+        </button>
+      </div>
+    </div>
+ 
+  </main>
+ 
+  <!-- ==================== MINIMAL FOOTER ==================== -->
+  <footer class="py-4 px-4 text-center text-[11px] sm:text-xs text-slate-600">
+    Step 1 MVP • Linked Names, Emails & Numbers Replaced Automatically
+  </footer>
+ 
+  <!-- ==================== CORE SANITIZER LOGIC ==================== -->
+  <script>
+    // UI View Containers
+    const viewUpload = document.getElementById('viewUpload');
+    const viewProcessing = document.getElementById('viewProcessing');
+    const viewResult = document.getElementById('viewResult');
+    const progressStatusText = document.getElementById('progressStatusText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const summaryBadgeText = document.getElementById('summaryBadgeText');
+    const identityMappingStrip = document.getElementById('identityMappingStrip');
+    const identityMappingPills = document.getElementById('identityMappingPills');
+ 
+    // Canvases
+    const originalCanvas = document.createElement('canvas');
+    const sanitizedCanvas = document.createElement('canvas');
+    const resultCanvas = document.getElementById('resultCanvas');
+ 
+    // State for re-rolling dummy values without re-running OCR
+    let detectedTokens = []; // Array of { text, type: 'NAME' | 'EMAIL' | 'NUMBER', personaKey, bbox: {x, y, w, h}, fontWeight }
+    let detectedPersonas = new Map(); // Map<personaKey, { origFirst, origLast, origName, origEmail }>
+    let seedOffset = 0;
+ 
+    // Dummy Persona Pools (Moshe Chaim at index 0 so default seed maps primary persona to Moshe Chaim)
+    const DUMMY_PERSONAS = [
+      { first: 'Moshe', last: 'Chaim', domain: 'mail.com' },
+      { first: 'Noa', last: 'Friedman', domain: 'inbox.org' },
+      { first: 'Ari', last: 'Goldberg', domain: 'webmail.net' },
+      { first: 'Maya', last: 'Rosen', domain: 'demo-corp.com' },
+      { first: 'Eli', last: 'Mizrahi', domain: 'sample.io' },
+      { first: 'Talia', last: 'Katz', domain: 'postbox.com' },
+      { first: 'Oren', last: 'Shapiro', domain: 'workspace.net' },
+      { first: 'Liora', last: 'Aviv', domain: 'cloudmail.org' },
+      { first: 'Yonatan', last: 'Barak', domain: 'fastmail.io' },
+      { first: 'galia', last: 'Weiss', domain: 'example.com' }
+    ];
+ 
+    // Built-in dictionary of common first/last names to assist standalone name recognition
+    const KNOWN_NAME_PARTS = new Set([
+      'levy', 'moshe', 'chaim', 'sarah', 'jenkins', 'david', 'cohen',
+      'levi', 'daniel', 'michael', 'chen', 'rachel', 'goldberg', 'noa', 'friedman',
+      'yossi', 'mila', 'ahuva', 'alex', 'morgan', 'jordan', 'lee', 'taylor', 'reed',
+      'casey', 'sam', 'patel', 'robin', 'vance', 'jamie', 'ross', 'drew', 'bailey',
+      'thorne', 'john', 'smith', 'emma', 'wilson', 'liam', 'brown', 'olivia', 'davis',
+      'noah', 'miller', 'ava', 'moore', 'ethan', 'anderson', 'sophia', 'thomas',
+      'benjamin', 'weiss', 'yael', 'tal', 'avi', 'omri', 'shir', 'dana', 'gideon',
+      'elena', 'marcus', 'claire', 'hannah', 'lucas', 'nathan', 'chloe', 'adam'
+    ]);
+ 
+    // Common UI/Business words that are capitalized but should NEVER be treated as Person Names
+    const UI_STOPWORDS = new Set([
+      'account', 'billing', 'summary', 'customer', 'support', 'screenshot', 'contact',
+      'identifiers', 'primary', 'email', 'backup', 'direct', 'phone', 'invoice',
+      'number', 'statement', 'date', 'balance', 'due', 'recent', 'transactions',
+      'recipient', 'reference', 'amount', 'total', 'status', 'paid', 'pending',
+      'address', 'portal', 'details', 'action', 'required', 'client', 'name',
+      'organization', 'company', 'department', 'project', 'manager', 'owner',
+      'created', 'updated', 'modified', 'active', 'inactive', 'verified', 'profile',
+      'settings', 'dashboard', 'overview', 'report', 'monthly', 'annual', 'payment',
+      'method', 'credit', 'card', 'bank', 'transfer', 'receipt', 'description',
+      'quantity', 'price', 'subtotal', 'tax', 'discount', 'notes', 'terms', 'id'
+    ]);
+ 
+    function showView(viewName) {
+      viewUpload.classList.add('hidden');
+      viewProcessing.classList.add('hidden');
+      viewResult.classList.add('hidden');
+ 
+      if (viewName === 'UPLOAD') viewUpload.classList.remove('hidden');
+      if (viewName === 'PROCESSING') viewProcessing.classList.remove('hidden');
+      if (viewName === 'RESULT') viewResult.classList.remove('hidden');
+    }
+ 
+    // Simple deterministic string hash
+    function hashString(str) {
+      let h = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return Math.abs(h);
+    }
+ 
+    // Strip leading/trailing punctuation from OCR word tokens
+    function cleanAlphaWord(w) {
+      return (w || '').replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, '');
+    }
+ 
+    // Check if word is Title-Case alphabetic (e.g. "Daniel", "Levy")
+    function isTitleCaseWord(w) {
+      const cleaned = cleanAlphaWord(w);
+      if (cleaned.length < 2) return false;
+      if (UI_STOPWORDS.has(cleaned.toLowerCase())) return false;
+      return /^[A-Z][a-z]+$/.test(cleaned);
+    }
+
+    /**
+     * Checks if a token is a financial/currency amount so it is NOT replaced.
+     * Matches currency symbols ($14,850.00, €50, ₪100) or standard decimal/comma amounts (1,250.00, 350.50).
+     */
+    function isCurrencyAmount(text, prevWordText = '', nextWordText = '') {
+      const trimmed = (text || '').trim();
+      // 1. Contains explicit currency symbol ($, €, £, ₪, ¥, ₹, ¢)
+      if (/[$€£₪¥₹¢]/.test(trimmed)) return true;
+
+      // 2. Adjacent word is a currency symbol or currency code
+      const currencyTokenRegex = /^([$€£₪¥₹¢]|USD|AUD|EUR|GBP|ILS|NIS|CAD|NZD)$/i;
+      if (currencyTokenRegex.test((prevWordText || '').trim()) || currencyTokenRegex.test((nextWordText || '').trim())) {
+        return true;
+      }
+
+      // 3. Formatted as a monetary figure with decimal cents (e.g., 14,850.00 or 250.50) or comma thousands (e.g., 14,850)
+      const cleaned = trimmed.replace(/^[(+-]+|[),.;:]+$/g, '');
+      if (/^\d{1,3}(,\d{3})+(\.\d{1,2})?$/.test(cleaned)) return true;
+      if (/^\d+\.\d{2}$/.test(cleaned)) return true;
+
+      return false;
+    }
+
+    /**
+     * Checks if a token is a formatted date (e.g., DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD, DD.MM.YY)
+     * and replaces it with a realistic dummy date while strictly keeping the original date format.
+     */
+    function replaceDatePreservingFormat(text, seedOffset) {
+      const trimmed = (text || '').trim();
+      // Match numeric dates separated by /, -, or .
+      const dateRegex = /^([^0-9]*)(\d{1,4})([\/\-.])(\d{1,2})\3(\d{2,4})([^0-9]*)$/;
+      const match = trimmed.match(dateRegex);
+      if (!match) return null;
+
+      const [, prefix, p1, sep, p2, p3, suffix] = match;
+      const n1 = parseInt(p1, 10);
+      const n2 = parseInt(p2, 10);
+      const n3 = parseInt(p3, 10);
+
+      const h = hashString(`${trimmed}_${seedOffset}`);
+
+      const pad = (val, len) => {
+        const s = String(val);
+        return len >= 2 ? s.padStart(len, '0') : s;
+      };
+
+      // Case 1: YYYY-MM-DD or YYYY/MM/DD (first part is 4-digit year)
+      if (p1.length === 4 && n2 >= 1 && n2 <= 12 && n3 >= 1 && n3 <= 31) {
+        let newMonth = (h % 12) + 1;
+        if (newMonth === n2) newMonth = (newMonth % 12) + 1;
+        let newDay = ((h >> 4) % 28) + 1;
+        if (newDay === n3) newDay = (newDay % 28) + 1;
+        // Keep the same year or shift slightly while keeping 4 digits
+        const newYear = n1;
+        return `${prefix}${pad(newYear, p1.length)}${sep}${pad(newMonth, p2.length)}${sep}${pad(newDay, p3.length)}${suffix}`;
+      }
+
+      // Case 2: DD/MM/YYYY or MM/DD/YYYY (last part is 2- or 4-digit year)
+      if ((p3.length === 4 || p3.length === 2) && n1 >= 1 && n1 <= 31 && n2 >= 1 && n2 <= 31) {
+        const newYear = n3;
+        // If second number <= 12 (standard DD/MM/YYYY or MM/DD/YYYY where both are valid), preserve exact positions
+        if (n2 <= 12) {
+          let newDay = (h % 28) + 1;
+          if (newDay === n1) newDay = (newDay % 28) + 1;
+          let newMonth = ((h >> 4) % 12) + 1;
+          if (newMonth === n2) newMonth = (newMonth % 12) + 1;
+          return `${prefix}${pad(newDay, p1.length)}${sep}${pad(newMonth, p2.length)}${sep}${pad(newYear, p3.length)}${suffix}`;
+        } else {
+          // MM/DD/YYYY where second part is clearly day (> 12)
+          let newMonth = (h % 12) + 1;
+          if (newMonth === n1) newMonth = (newMonth % 12) + 1;
+          let newDay = ((h >> 4) % 28) + 1;
+          if (newDay === n2) newDay = (newDay % 28) + 1;
+          return `${prefix}${pad(newMonth, p1.length)}${sep}${pad(newDay, p2.length)}${sep}${pad(newYear, p3.length)}${suffix}`;
+        }
+      }
+
+      return null;
+    }
+ 
+    /**
+     * Parses an email address like "d.levy@example.com" or "david.cohen@enterprise.com"
+     * into clues for matching names on the screenshot.
+     */
+    function parseEmailClues(emailStr) {
+      const cleaned = emailStr.trim().replace(/[,;:)>\]]+$/, '');
+      const [localPart, domainPart] = cleaned.toLowerCase().split('@');
+      if (!localPart || !domainPart) return null;
+ 
+      // Remove trailing digits in localPart (e.g. j.smith99 -> j.smith)
+      const alphaLocal = localPart.replace(/\d+$/g, '');
+      const segments = alphaLocal.split(/[._\-]+/).filter(Boolean);
+ 
+      let firstClue = '';
+      let lastClue = '';
+      let pattern = 'FIRST_DOT_LAST';
+ 
+      if (segments.length >= 2) {
+        firstClue = segments[0];
+        lastClue = segments[segments.length - 1];
+        const sep = localPart.includes('_') ? '_' : localPart.includes('-') ? '-' : '.';
+        if (firstClue.length === 1) {
+          pattern = sep === '.' ? 'INITIAL_DOT_LAST' : 'INITIAL_SEP_LAST';
+        } else {
+          pattern = sep === '_' ? 'FIRST_UNDERSCORE_LAST' : sep === '-' ? 'FIRST_HYPHEN_LAST' : 'FIRST_DOT_LAST';
+        }
+      } else if (segments.length === 1) {
+        firstClue = segments[0];
+        pattern = 'SINGLE_LOCAL';
+      }
+ 
+      return {
+        rawEmail: cleaned,
+        localPart,
+        domainPart,
+        firstClue,
+        lastClue,
+        pattern
+      };
+    }
+ 
+    /**
+     * Formats a dummy email that mirrors the exact structure of the original email
+     * e.g., Daniel Levy + d.levy@example.com -> Moshe Chaim + m.chaim@mail.com
+     */
+    function formatLinkedEmail(originalEmail, dummyPersona) {
+      const clues = parseEmailClues(originalEmail);
+      const f = dummyPersona.first.toLowerCase();
+      const l = dummyPersona.last.toLowerCase();
+      const dom = dummyPersona.domain;
+ 
+      if (!clues) return `${f[0]}.${l}@${dom}`;
+ 
+      switch (clues.pattern) {
+        case 'INITIAL_DOT_LAST':
+          return `${f[0]}.${l}@${dom}`;
+        case 'INITIAL_SEP_LAST':
+          return `${f[0]}_${l}@${dom}`;
+        case 'FIRST_UNDERSCORE_LAST':
+          return `${f}_${l}@${dom}`;
+        case 'FIRST_HYPHEN_LAST':
+          return `${f}-${l}@${dom}`;
+        case 'FIRST_DOT_LAST':
+          return `${f}.${l}@${dom}`;
+        case 'SINGLE_LOCAL':
+          // Check if single local part was initial+lastname concatenated (e.g. dlevy)
+          if (clues.firstClue.length > 4) {
+            return `${f[0]}.${l}@${dom}`;
+          }
+          return `${f}@${dom}`;
+        default:
+          return `${f[0]}.${l}@${dom}`;
+      }
+    }
+ 
+    /**
+     * Two-Pass Relational Entity Engine:
+     * Scans raw OCR word objects [{ text, bbox: {x0, y0, x1, y1}, fontWeight }],
+     * pairs adjacent first/last name tokens, links names to emails across the screenshot,
+     * and extracts numbers (excluding currency amounts).
+     */
+    function analyzeTokensAndLinkPersonas(rawWords) {
+      detectedTokens = [];
+      detectedPersonas = new Map();
+ 
+      // Normalize word list
+      const words = rawWords
+        .map((w, idx) => ({
+          idx,
+          text: (w.text || '').trim(),
+          x: w.bbox.x0,
+          y: w.bbox.y0,
+          w: w.bbox.x1 - w.bbox.x0,
+          h: w.bbox.y1 - w.bbox.y0,
+          fontWeight: w.fontWeight || '500',
+          consumed: false
+        }))
+        .filter(w => w.text.length > 0);
+ 
+      // PASS 1A: Find all Email Addresses first & create initial Persona slots
+      const emailEntries = [];
+      words.forEach(w => {
+        if (w.text.includes('@') && w.text.includes('.')) {
+          const clues = parseEmailClues(w.text);
+          if (clues) {
+            w.consumed = true;
+            emailEntries.push({ word: w, clues });
+          }
+        }
+      });
+ 
+      // Helper to find or create a canonical Persona key for a (firstName, lastName, emailClues)
+      let personaOrderCounter = 0;
+      function getOrCreatePersona({ first, last, emailClues }) {
+        const fNorm = (first || '').toLowerCase();
+        const lNorm = (last || '').toLowerCase();
+ 
+        // 1. Check if an existing persona already matches this last name or email
+        for (const [key, p] of detectedPersonas.entries()) {
+          if (emailClues && p.origEmail && p.origEmail.toLowerCase() === emailClues.rawEmail.toLowerCase()) {
+            if (first && !p.origFirst) p.origFirst = first;
+            if (last && !p.origLast) p.origLast = last;
+            return key;
+          }
+          // Match by last name + initial or first name
+          if (lNorm && p.lastClue && lNorm === p.lastClue) {
+            if (!fNorm || !p.firstClue || fNorm.startsWith(p.firstClue) || p.firstClue.startsWith(fNorm[0])) {
+              if (first && !p.origFirst) p.origFirst = first;
+              if (last && !p.origLast) p.origLast = last;
+              if (emailClues && !p.origEmail) p.origEmail = emailClues.rawEmail;
+              return key;
+            }
+          }
+          // Match if single-local email matches first name
+          if (fNorm && p.firstClue && fNorm === p.firstClue && !p.lastClue) {
+            if (first && !p.origFirst) p.origFirst = first;
+            if (last && !p.origLast) {
+              p.origLast = last;
+              p.lastClue = lNorm;
+            }
+            return key;
+          }
+        }
+ 
+        // 2. Otherwise create a new linked Persona slot
+        const newKey = `persona_${personaOrderCounter++}`;
+        detectedPersonas.set(newKey, {
+          index: personaOrderCounter - 1,
+          origFirst: first || '',
+          origLast: last || '',
+          firstClue: fNorm || (emailClues ? emailClues.firstClue : ''),
+          lastClue: lNorm || (emailClues ? emailClues.lastClue : ''),
+          origEmail: emailClues ? emailClues.rawEmail : ''
+        });
+        return newKey;
+      }
+ 
+      // Register all emails first so their clues (e.g. "d" + "levy") are ready when scanning names
+      const emailTokenRefs = [];
+      emailEntries.forEach(({ word, clues }) => {
+        const pKey = getOrCreatePersona({ first: '', last: '', emailClues: clues });
+        emailTokenRefs.push({ word, pKey, clues });
+      });
+ 
+      // PASS 1B: Scan for Two-Word Person Names on the same line (e.g., "Daniel" + "Levy")
+      for (let i = 0; i < words.length - 1; i++) {
+        const w1 = words[i];
+        const w2 = words[i + 1];
+        if (w1.consumed || w2.consumed) continue;
+ 
+        // Check if w1 and w2 are on the same horizontal line and reasonably close
+        const sameLine = Math.abs(w1.y - w2.y) < Math.max(w1.h, w2.h) * 0.7;
+        const horizontalGap = w2.x - (w1.x + w1.w);
+        const adjacent = horizontalGap >= -4 && horizontalGap < Math.max(w1.h, w2.h) * 2.5;
+ 
+        if (sameLine && adjacent && isTitleCaseWord(w1.text) && isTitleCaseWord(w2.text)) {
+          const clean1 = cleanAlphaWord(w1.text);
+          const clean2 = cleanAlphaWord(w2.text);
+          const l1 = clean1.toLowerCase();
+          const l2 = clean2.toLowerCase();
+ 
+          // Check if this pair matches an email clue OR contains known name parts
+          let matchesEmailClue = false;
+          for (const p of detectedPersonas.values()) {
+            if (
+              (p.lastClue && l2 === p.lastClue) ||
+              (p.firstClue && l1 === p.firstClue) ||
+              (p.lastClue && p.lastClue.endsWith(l2) && p.lastClue.startsWith(l1[0]))
+            ) {
+              matchesEmailClue = true;
+              break;
+            }
+          }
+ 
+          const isKnownName = KNOWN_NAME_PARTS.has(l1) || KNOWN_NAME_PARTS.has(l2);
+ 
+          if (matchesEmailClue || isKnownName) {
+            w1.consumed = true;
+            w2.consumed = true;
+ 
+            const pKey = getOrCreatePersona({ first: clean1, last: clean2, emailClues: null });
+            const mergedX = Math.min(w1.x, w2.x);
+            const mergedY = Math.min(w1.y, w2.y);
+            const mergedW = Math.max(w1.x + w1.w, w2.x + w2.w) - mergedX;
+            const mergedH = Math.max(w1.y + w1.h, w2.y + w2.h) - mergedY;
+ 
+            detectedTokens.push({
+              text: `${clean1} ${clean2}`,
+              type: 'NAME',
+              nameFormat: 'FULL',
+              personaKey: pKey,
+              bbox: { x: mergedX, y: mergedY, w: mergedW, h: mergedH },
+              fontWeight: w1.fontWeight
+            });
+          }
+        }
+      }
+ 
+      // Also check single unconsumed words that match a linked Persona's first or last name (e.g., "Levy" or "Daniel")
+      words.forEach(w => {
+        if (w.consumed) return;
+        if (!isTitleCaseWord(w.text)) return;
+        const clean = cleanAlphaWord(w.text);
+        const lower = clean.toLowerCase();
+ 
+        for (const [pKey, p] of detectedPersonas.entries()) {
+          if ((p.origFirst && lower === p.origFirst.toLowerCase()) || (p.origLast && lower === p.origLast.toLowerCase())) {
+            w.consumed = true;
+            detectedTokens.push({
+              text: clean,
+              type: 'NAME',
+              nameFormat: lower === (p.origFirst || '').toLowerCase() ? 'FIRST_ONLY' : 'LAST_ONLY',
+              personaKey: pKey,
+              bbox: { x: w.x, y: w.y, w: w.w, h: w.h },
+              fontWeight: w.fontWeight
+            });
+            break;
+          }
+        }
+      });
+ 
+      // Commit Email tokens with their linked Persona keys
+      emailTokenRefs.forEach(({ word, pKey }) => {
+        detectedTokens.push({
+          text: word.text,
+          type: 'EMAIL',
+          personaKey: pKey,
+          bbox: { x: word.x, y: word.y, w: word.w, h: word.h },
+          fontWeight: word.fontWeight
+        });
+      });
+ 
+      // PASS 2: Scan remaining unconsumed tokens for Numbers (dates, phones, IDs — skipping amounts)
+      words.forEach((w, idx) => {
+        if (w.consumed) return;
+        if (/\d/.test(w.text)) {
+          const prevText = idx > 0 ? words[idx - 1].text : '';
+          const nextText = idx < words.length - 1 ? words[idx + 1].text : '';
+
+          // Skip monetary amounts so they are NOT replaced
+          if (isCurrencyAmount(w.text, prevText, nextText)) {
+            return;
+          }
+
+          w.consumed = true;
+          detectedTokens.push({
+            text: w.text,
+            type: 'NUMBER',
+            personaKey: null,
+            bbox: { x: w.x, y: w.y, w: w.w, h: w.h },
+            fontWeight: w.fontWeight
+          });
+        }
+      });
+    }
+ 
+    /**
+     * Resolves the synthetic Persona object for a given personaKey and current seedOffset
+     */
+    function getDummyPersonaForSlot(personaKey) {
+      const pInfo = detectedPersonas.get(personaKey);
+      const slotIdx = pInfo ? pInfo.index : 0;
+      const poolIdx = (slotIdx + seedOffset) % DUMMY_PERSONAS.length;
+      const chosen = DUMMY_PERSONAS[poolIdx];
+      return {
+        first: chosen.first.charAt(0).toUpperCase() + chosen.first.slice(1),
+        last: chosen.last.charAt(0).toUpperCase() + chosen.last.slice(1),
+        domain: chosen.domain
+      };
+    }
+ 
+    /**
+     * Generates replacement string for NAME, EMAIL, or NUMBER while maintaining Persona links
+     * and preserving valid date formats.
+     */
+    function generateDummyText(item, numberMemoryMap) {
+      if (item.type === 'NAME') {
+        const dummy = getDummyPersonaForSlot(item.personaKey);
+        if (item.nameFormat === 'FIRST_ONLY') return dummy.first;
+        if (item.nameFormat === 'LAST_ONLY') return dummy.last;
+        return `${dummy.first} ${dummy.last}`;
+      }
+ 
+      if (item.type === 'EMAIL') {
+        const dummy = getDummyPersonaForSlot(item.personaKey);
+        return formatLinkedEmail(item.text, dummy);
+      }
+ 
+      if (item.type === 'NUMBER') {
+        const key = `NUM:${item.text.trim().toLowerCase()}`;
+        if (numberMemoryMap.has(key)) {
+          return numberMemoryMap.get(key);
+        }
+
+        // Keep the date format intact if the token is a date
+        const formattedDate = replaceDatePreservingFormat(item.text, seedOffset);
+        if (formattedDate !== null) {
+          numberMemoryMap.set(key, formattedDate);
+          return formattedDate;
+        }
+ 
+        let digitIdx = 0;
+        const replacement = item.text.replace(/\d/g, (digitChar) => {
+          digitIdx++;
+          const dHash = hashString(`${item.text}_${digitIdx}_${seedOffset}`);
+          if (digitIdx === 1 && digitChar !== '0') {
+            return String((dHash % 8) + 1);
+          }
+          return String(dHash % 10);
+        });
+ 
+        numberMemoryMap.set(key, replacement);
+        return replacement;
+      }
+ 
+      return item.text;
+    }
+ 
+    /**
+     * Samples the background color from the box perimeter and the highest-contrast text color inside
+     */
+    function sampleColors(ctx, bbox) {
+      const W = ctx.canvas.width;
+      const H = ctx.canvas.height;
+      const x = Math.max(0, Math.floor(bbox.x));
+      const y = Math.max(0, Math.floor(bbox.y));
+      const w = Math.min(W - x, Math.max(4, Math.floor(bbox.w)));
+      const h = Math.min(H - y, Math.max(4, Math.floor(bbox.h)));
+ 
+      const data = ctx.getImageData(x, y, w, h).data;
+ 
+      // Perimeter average for background color
+      let rSum = 0, gSum = 0, bSum = 0, count = 0;
+      for (let px = 0; px < w; px++) {
+        const topIdx = px * 4;
+        const botIdx = ((h - 1) * w + px) * 4;
+        rSum += data[topIdx] + data[botIdx];
+        gSum += data[topIdx + 1] + data[botIdx + 1];
+        bSum += data[topIdx + 2] + data[botIdx + 2];
+        count += 2;
+      }
+ 
+      const bgR = Math.round(rSum / count);
+      const bgG = Math.round(gSum / count);
+      const bgB = Math.round(bSum / count);
+ 
+      // Highest-contrast interior pixel for original text color
+      let maxDist = -1;
+      let fgR = 15, fgG = 23, fgB = 42;
+ 
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const dist = Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB);
+        if (dist > maxDist) {
+          maxDist = dist;
+          fgR = r; fgG = g; fgB = b;
+        }
+      }
+ 
+      return {
+        bgColor: `rgb(${bgR}, ${bgG}, ${bgB})`,
+        fgColor: `rgb(${fgR}, ${fgG}, ${fgB})`
+      };
+    }
+ 
+    /**
+     * Draws the sanitized image using the detected tokens and updates the Linked Personas strip
+     */
+    function renderSanitizedOutput() {
+      const W = originalCanvas.width;
+      const H = originalCanvas.height;
+ 
+      sanitizedCanvas.width = W;
+      sanitizedCanvas.height = H;
+ 
+      const origCtx = originalCanvas.getContext('2d');
+      const sanCtx = sanitizedCanvas.getContext('2d');
+ 
+      // Start with original image
+      sanCtx.drawImage(originalCanvas, 0, 0);
+ 
+      const numberMemoryMap = new Map();
+      let nameCount = 0;
+      let emailCount = 0;
+      let numberCount = 0;
+ 
+      detectedTokens.forEach(item => {
+        if (item.type === 'NAME') nameCount++;
+        if (item.type === 'EMAIL') emailCount++;
+        if (item.type === 'NUMBER') numberCount++;
+ 
+        const dummyText = generateDummyText(item, numberMemoryMap);
+        const { x, y, w, h } = item.bbox;
+        const { bgColor, fgColor } = sampleColors(origCtx, item.bbox);
+ 
+        // 1. Erase original text cleanly using sampled background color
+        sanCtx.fillStyle = bgColor;
+        sanCtx.fillRect(x - 2, y - 2, w + 4, h + 4);
+ 
+        // 2. Draw replacement dummy text in the exact bounding box
+        const fontSize = Math.max(10, Math.round(h * 0.76));
+        const weight = item.fontWeight || '500';
+        sanCtx.font = `${weight} ${fontSize}px Inter, "Segoe UI", system-ui, sans-serif`;
+        sanCtx.fillStyle = fgColor;
+        sanCtx.textBaseline = 'middle';
+ 
+        const measuredWidth = sanCtx.measureText(dummyText).width;
+        const centerY = y + h / 2 + 1;
+ 
+        sanCtx.save();
+        if (measuredWidth > w * 1.08) {
+          const scale = (w * 1.04) / measuredWidth;
+          sanCtx.translate(x, centerY);
+          sanCtx.scale(scale, 1);
+          sanCtx.fillText(dummyText, 0, 0);
+        } else {
+          sanCtx.fillText(dummyText, x, centerY);
+        }
+        sanCtx.restore();
+      });
+ 
+      // Copy sanitized image to the visible resultCanvas
+      resultCanvas.width = W;
+      resultCanvas.height = H;
+      resultCanvas.getContext('2d').drawImage(sanitizedCanvas, 0, 0);
+ 
+      // Update summary pill text
+      const nameLabel = nameCount === 1 ? '1 name' : `${nameCount} names`;
+      const emailLabel = emailCount === 1 ? '1 email' : `${emailCount} emails`;
+      const numLabel = numberCount === 1 ? '1 number' : `${numberCount} numbers`;
+      summaryBadgeText.textContent = `Done! Replaced ${nameLabel}, ${emailLabel}, and ${numLabel}.`;
+ 
+      // Populate Linked Identity Mapping pills
+      identityMappingPills.innerHTML = '';
+      if (detectedPersonas.size === 0) {
+        identityMappingStrip.classList.add('hidden');
+      } else {
+        identityMappingStrip.classList.remove('hidden');
+        detectedPersonas.forEach((pInfo, pKey) => {
+          const dummy = getDummyPersonaForSlot(pKey);
+          const origNameStr = (pInfo.origFirst || pInfo.origLast)
+            ? `${pInfo.origFirst} ${pInfo.origLast}`.trim()
+            : '';
+          const fakeNameStr = `${dummy.first} ${dummy.last}`;
+          const fakeEmailStr = pInfo.origEmail ? formatLinkedEmail(pInfo.origEmail, dummy) : '';
+ 
+          const origDisplay = origNameStr && pInfo.origEmail
+            ? `${origNameStr} (${pInfo.origEmail})`
+            : origNameStr || pInfo.origEmail;
+ 
+          const fakeDisplay = origNameStr && fakeEmailStr
+            ? `${fakeNameStr} (${fakeEmailStr})`
+            : origNameStr ? fakeNameStr : fakeEmailStr;
+ 
+          const pill = document.createElement('div');
+          pill.className = 'flex flex-col sm:inline-flex sm:flex-row sm:items-center gap-1 sm:gap-1.5 px-3 py-2 sm:px-2.5 sm:py-1 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono break-all sm:break-normal';
+          pill.innerHTML = `
+            <span class="text-slate-400 line-through">${origDisplay}</span>
+            <span class="hidden sm:inline-flex items-center">
+              <i class="fa-solid fa-arrow-right text-[10px] text-sky-400"></i>
+            </span>
+            <span class="sm:hidden text-[10px] text-sky-400 font-sans font-medium flex items-center gap-1">
+              <i class="fa-solid fa-arrow-turn-down fa-rotate-90"></i> Replaced with:
+            </span>
+            <span class="text-emerald-300 font-semibold">${fakeDisplay}</span>
+          `;
+          identityMappingPills.appendChild(pill);
+        });
+      }
+    }
+ 
+    /**
+     * Runs real Tesseract.js OCR on any uploaded or pasted image
+     */
+    async function processUploadedImage(imgElement) {
+      showView('PROCESSING');
+      progressBarFill.style.width = '10%';
+      progressStatusText.textContent = 'Preparing image canvas...';
+ 
+      originalCanvas.width = imgElement.naturalWidth || imgElement.width;
+      originalCanvas.height = imgElement.naturalHeight || imgElement.height;
+      const origCtx = originalCanvas.getContext('2d');
+      origCtx.drawImage(imgElement, 0, 0);
+ 
+      try {
+        const dataUrl = originalCanvas.toDataURL('image/png');
+        const result = await Tesseract.recognize(dataUrl, 'eng', {
+          logger: m => {
+            if (m.status) {
+              const pct = m.progress ? Math.max(12, Math.round(m.progress * 100)) : 20;
+              progressBarFill.style.width = `${pct}%`;
+              progressStatusText.textContent = `${m.status} (${pct}%)`;
+            }
+          }
+        });
+ 
+        const words = result.data.words || [];
+        seedOffset = 0;
+        analyzeTokensAndLinkPersonas(words);
+ 
+        renderSanitizedOutput();
+        showView('RESULT');
+      } catch (err) {
+        progressStatusText.textContent = 'Error scanning image: ' + err.message;
+      }
+    }
+ 
+    /**
+     * Built-in 1-Click Sample Screenshot Generator featuring Daniel Levy (d.levy@example.com) -> Moshe Chaim (m.chaim@mail.com)
+     */
+    function runSampleScreenshotDemo() {
+      showView('PROCESSING');
+      progressBarFill.style.width = '45%';
+      progressStatusText.textContent = 'Generating sample business screenshot & linking personas...';
+ 
+      const W = 940;
+      const H = 550;
+      originalCanvas.width = W;
+      originalCanvas.height = H;
+      const ctx = originalCanvas.getContext('2d');
+ 
+      const simulatedWords = [];
+ 
+      // Helper that draws text on the sample screenshot and records individual word bounding boxes (just like OCR)
+      function drawSampleText(text, x, y, font, color, weight = '500') {
+        ctx.font = font;
+        ctx.fillStyle = color;
+        ctx.textBaseline = 'top';
+        ctx.fillText(text, x, y);
+ 
+        const sizeMatch = font.match(/(\d+)px/);
+        const fontSize = sizeMatch ? parseInt(sizeMatch[1], 10) : 14;
+        const height = Math.round(fontSize * 1.25);
+ 
+        // Split multi-word strings into word-level tokens so the Two-Pass Relational Engine pairs them naturally
+        const parts = text.split(' ');
+        let cursorX = x;
+        const spaceW = ctx.measureText(' ').width;
+ 
+        parts.forEach(part => {
+          if (!part) return;
+          const partW = ctx.measureText(part).width;
+          simulatedWords.push({
+            text: part,
+            bbox: {
+              x0: Math.round(cursorX),
+              y0: Math.round(y),
+              x1: Math.round(cursorX + partW),
+              y1: Math.round(y + height)
+            },
+            fontWeight: weight
+          });
+          cursorX += partW + spaceW;
+        });
+      }
+ 
+      // Background
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(0, 0, W, H);
+ 
+      // Top Window Bar
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, W, 48);
+      ['#ef4444', '#f59e0b', '#10b981'].forEach((c, i) => {
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.arc(22 + i * 18, 24, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.font = '600 13px Inter, sans-serif';
+      ctx.fillStyle = '#e2e8f0';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Account Billing Summary — Customer Support Screenshot', 88, 24);
+ 
+      // Card 1: Account Owner & Identifiers
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(28, 70, W - 56, 145, 12);
+      ctx.fill();
+      ctx.stroke();
+ 
+      ctx.font = '700 16px Inter, sans-serif';
+      ctx.fillStyle = '#0f172a';
+      ctx.textBaseline = 'top';
+      ctx.fillText('Account Owner & Contact Details', 50, 90);
+ 
+      ctx.font = '500 13px Inter, sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Account Owner:', 50, 126);
+      drawSampleText('Daniel Levy', 170, 126, '700 14px Inter, sans-serif', '#0f172a', '700');
+ 
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Primary Email:', 50, 154);
+      drawSampleText('d.levy@example.com', 170, 154, '600 13px Inter, sans-serif', '#2563eb', '600');
+ 
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Direct Phone:', 50, 182);
+      drawSampleText('0412-884-920', 170, 182, '600 13px Inter, sans-serif', '#1e293b', '600');
+ 
+      // Right side of Card 1
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Invoice Number:', 540, 126);
+      drawSampleText('INV-2026-9041', 665, 126, '700 13px Inter, sans-serif', '#0f172a', '700');
+ 
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Statement Date:', 540, 154);
+      drawSampleText('07/11/2026', 665, 154, '600 13px Inter, sans-serif', '#0f172a', '600');
+ 
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Balance Due:', 540, 182);
+      drawSampleText('$14,850.00', 665, 180, '700 15px Inter, sans-serif', '#dc2626', '700');
+ 
+      // Card 2: Recent Payments Table
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.roundRect(28, 235, W - 56, 285, 12);
+      ctx.fill();
+      ctx.stroke();
+ 
+      ctx.font = '700 15px Inter, sans-serif';
+      ctx.fillStyle = '#0f172a';
+      ctx.fillText('Recent Team Transactions', 50, 255);
+ 
+      // Table Header
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(48, 286, W - 96, 34);
+      ctx.font = '700 11px Inter, sans-serif';
+      ctx.fillStyle = '#475569';
+      ctx.fillText('DATE', 64, 297);
+      ctx.fillText('CLIENT NAME', 185, 297);
+      ctx.fillText('EMAIL ADDRESS', 380, 297);
+      ctx.fillText('REFERENCE ID', 640, 297);
+      ctx.fillText('AMOUNT', 785, 297);
+ 
+      const sampleRows = [
+        { date: '14/10/2026', name: 'Daniel Levy', email: 'd.levy@example.com', ref: 'TX-44821', amount: '$6,400.00', bg: '#ffffff' },
+        { date: '22/10/2026', name: 'Sarah Jenkins', email: 's.jenkins@workplace.org', ref: 'TX-44905', amount: '$3,250.50', bg: '#f8fafc' },
+        { date: '01/11/2026', name: 'David Cohen', email: 'david.cohen@enterprise.com', ref: 'TX-45112', amount: '$5,199.50', bg: '#ffffff' }
+      ];
+ 
+      sampleRows.forEach((r, idx) => {
+        const y = 320 + idx * 56;
+        ctx.fillStyle = r.bg;
+        ctx.fillRect(48, y, W - 96, 56);
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.beginPath();
+        ctx.moveTo(48, y + 56);
+        ctx.lineTo(W - 48, y + 56);
+        ctx.stroke();
+ 
+        const ty = y + 20;
+        drawSampleText(r.date, 64, ty, '500 13px Inter, sans-serif', '#334155', '500');
+        drawSampleText(r.name, 185, ty, '600 13px Inter, sans-serif', '#0f172a', '600');
+        drawSampleText(r.email, 380, ty, '500 13px Inter, sans-serif', '#2563eb', '500');
+        drawSampleText(r.ref, 640, ty, '600 13px Inter, sans-serif', '#475569', '600');
+        drawSampleText(r.amount, 785, ty, '700 13px Inter, sans-serif', '#059669', '700');
+      });
+ 
+      setTimeout(() => {
+        progressBarFill.style.width = '100%';
+        seedOffset = 0; // Ensures slot 0 defaults to Moshe Chaim (m.chaim@mail.com)
+        analyzeTokensAndLinkPersonas(simulatedWords);
+        renderSanitizedOutput();
+        showView('RESULT');
+      }, 400);
+    }
+ 
+    // ==================== EVENT LISTENERS ====================
+ 
+    // File Input Upload
+    document.getElementById('fileInput').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        processUploadedImage(img);
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+      e.target.value = '';
+    });
+ 
+    // Click on DropZone Card (outside buttons) triggers file input
+    document.getElementById('dropZone').addEventListener('click', e => {
+      if (e.target.closest('button') || e.target.closest('label') || e.target.tagName === 'INPUT') return;
+      document.getElementById('fileInput').click();
+    });
+ 
+    // Drag & Drop Screenshot
+    const dropZone = document.getElementById('dropZone');
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('border-sky-400', 'bg-slate-900');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('border-sky-400', 'bg-slate-900');
+    });
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('border-sky-400', 'bg-slate-900');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          processUploadedImage(img);
+          URL.revokeObjectURL(url);
+        };
+        img.src = url;
+      }
+    });
+ 
+    // Global Paste (Ctrl+V) anywhere on the page
+    window.addEventListener('paste', e => {
+      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      for (const item of items) {
+        if (item.type.indexOf('image') === 0) {
+          const blob = item.getAsFile();
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            processUploadedImage(img);
+            URL.revokeObjectURL(url);
+          };
+          img.src = url;
+          break;
+        }
+      }
+    });
+ 
+    // Try with a Sample Screenshot Button
+    document.getElementById('btnTrySample').addEventListener('click', () => {
+      runSampleScreenshotDemo();
+    });
+ 
+    // Shuffle Dummy Values Button
+    document.getElementById('btnRerollDummy').addEventListener('click', () => {
+      seedOffset += 1;
+      renderSanitizedOutput();
+    });
+ 
+    // Hold to Compare Original Button (Mouse Hold + Mobile Touch Hold & Tap Fallback)
+    const btnCompare = document.getElementById('btnCompareOriginal');
+    const compareBtnLabel = document.getElementById('compareBtnLabel');
+    let isShowingOriginal = false;
+ 
+    const showOrig = () => {
+      isShowingOriginal = true;
+      const ctx = resultCanvas.getContext('2d');
+      ctx.drawImage(originalCanvas, 0, 0);
+      btnCompare.classList.add('bg-amber-500/20', 'text-amber-300', 'border-amber-500/40');
+      if (compareBtnLabel) compareBtnLabel.textContent = 'Showing Original...';
+    };
+    const showSan = () => {
+      if (!isShowingOriginal) return;
+      isShowingOriginal = false;
+      const ctx = resultCanvas.getContext('2d');
+      ctx.drawImage(sanitizedCanvas, 0, 0);
+      btnCompare.classList.remove('bg-amber-500/20', 'text-amber-300', 'border-amber-500/40');
+      if (compareBtnLabel) compareBtnLabel.textContent = 'Hold to Show Original';
+    };
+ 
+    btnCompare.addEventListener('mousedown', showOrig);
+    btnCompare.addEventListener('mouseup', showSan);
+    btnCompare.addEventListener('mouseleave', showSan);
+    btnCompare.addEventListener('touchstart', e => {
+      e.preventDefault();
+      showOrig();
+    }, { passive: false });
+    btnCompare.addEventListener('touchend', e => {
+      e.preventDefault();
+      showSan();
+    }, { passive: false });
+    btnCompare.addEventListener('touchcancel', showSan);
+    btnCompare.addEventListener('contextmenu', e => e.preventDefault());
+ 
+    // Download Sanitized Image Button
+    document.getElementById('btnDownload').addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = `sanitized-screenshot-${Date.now()}.png`;
+      link.href = sanitizedCanvas.toDataURL('image/png');
+      link.click();
+    });
+ 
+    // Download Original Image Button
+    document.getElementById('btnDownloadOriginal').addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = `original-screenshot-${Date.now()}.png`;
+      link.href = originalCanvas.toDataURL('image/png');
+      link.click();
+    });
+ 
+    // Keyboard shortcut: Hold Spacebar while in Result view to compare original
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Space' && !viewResult.classList.contains('hidden') && document.activeElement.tagName !== 'BUTTON') {
+        e.preventDefault();
+        showOrig();
+      }
+    });
+    window.addEventListener('keyup', e => {
+      if (e.code === 'Space' && !viewResult.classList.contains('hidden')) {
+        showSan();
+      }
+    });
+ 
+    // Upload Another Screenshot Button
+    document.getElementById('btnReset').addEventListener('click', () => {
+      showView('UPLOAD');
+    });
+  </script>
+</body>
+</html>

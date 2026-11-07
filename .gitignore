@@ -1,0 +1,6 @@
+# Keep personal docs and screenshots off the public repo
+*.pdf
+*.png
+*.PNG
+*.jpg
+*.jpeg
